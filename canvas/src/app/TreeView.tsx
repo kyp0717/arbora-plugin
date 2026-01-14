@@ -50,8 +50,47 @@ function getStatusColor(status: string): string {
   }
 }
 
+// Color classes for node styling in browser diagrams
+const BROWSER_COLOR_CLASSES = `
+    classDef purple fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    classDef green fill:#10b981,stroke:#059669,color:#fff
+    classDef blue fill:#3b82f6,stroke:#2563eb,color:#fff
+    classDef orange fill:#f97316,stroke:#ea580c,color:#fff
+    classDef pink fill:#ec4899,stroke:#db2777,color:#fff
+    classDef red fill:#ef4444,stroke:#dc2626,color:#fff
+    classDef yellow fill:#eab308,stroke:#ca8a04,color:#1e1e2e
+    classDef gray fill:#374151,stroke:#4b5563,color:#9ca3af
+    classDef cyan fill:#06b6d4,stroke:#0891b2,color:#fff`;
+
+// Inject color classes into diagram content for browser rendering
+function injectColorClasses(content: string): string {
+  // Skip if already has classDef
+  if (content.includes('classDef')) {
+    return content;
+  }
+
+  // Find the graph/flowchart declaration line
+  const lines = content.split('\n');
+  const graphLineIndex = lines.findIndex(line =>
+    /^\s*(graph|flowchart)\b/i.test(line)
+  );
+
+  if (graphLineIndex === -1) {
+    return content;
+  }
+
+  // Insert color classes after graph declaration
+  const beforeGraph = lines.slice(0, graphLineIndex + 1);
+  const afterGraph = lines.slice(graphLineIndex + 1);
+
+  return [...beforeGraph, BROWSER_COLOR_CLASSES, ...afterGraph].join('\n');
+}
+
 // Open diagram in browser
 async function openDiagram(diagram: Diagram): Promise<void> {
+  // Inject color classes if this is a graph/flowchart
+  const themedContent = injectColorClasses(diagram.content);
+
   const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
@@ -60,25 +99,49 @@ async function openDiagram(diagram: Diagram): Promise<void> {
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #1a1a2e;
-      color: #eee;
+      background: #11111b;
+      color: #cdd6f4;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
+      padding: 40px;
+      min-height: 100vh;
     }
-    h1 { color: #00d9ff; margin-bottom: 5px; }
-    .type { color: #888; margin-bottom: 20px; }
-    .mermaid { background: #16213e; padding: 20px; border-radius: 8px; }
+    h1 { color: #00d9ff; margin-bottom: 5px; font-size: 2rem; }
+    .type { color: #6c7086; margin-bottom: 30px; font-size: 1rem; }
+    .mermaid {
+      background: #1e1e2e;
+      padding: 30px;
+      border-radius: 12px;
+      border: 1px solid #45475a;
+    }
   </style>
 </head>
 <body>
   <h1>${diagram.name}</h1>
   <div class="type">${diagram.type}</div>
   <div class="mermaid">
-${diagram.content}
+${themedContent}
   </div>
-  <script>mermaid.initialize({ startOnLoad: true, theme: 'dark' });</script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#1e1e2e',
+        primaryTextColor: '#cdd6f4',
+        primaryBorderColor: '#45475a',
+        lineColor: '#6c7086',
+        secondaryColor: '#313244',
+        tertiaryColor: '#45475a',
+        background: '#11111b',
+        nodeBorder: '#45475a',
+        clusterBkg: '#1e1e2e',
+        clusterBorder: '#45475a',
+        titleColor: '#cdd6f4'
+      }
+    });
+  </script>
 </body>
 </html>`;
 

@@ -4,6 +4,65 @@ import { join } from 'path';
 import { detectTerminal } from '../terminal/tmux.js';
 import type { Diagram } from '../types/index.js';
 
+// Dark theme configuration for mermaid diagrams
+const DARK_THEME_INIT = `%%{init: {'theme': 'dark', 'themeVariables': {'primaryColor': '#1e1e2e', 'primaryTextColor': '#cdd6f4', 'primaryBorderColor': '#45475a', 'lineColor': '#6c7086', 'secondaryColor': '#313244', 'tertiaryColor': '#45475a', 'background': '#11111b', 'nodeBorder': '#45475a', 'clusterBkg': '#1e1e2e', 'clusterBorder': '#45475a', 'titleColor': '#cdd6f4'}}}%%`;
+
+// Color classes for node styling
+const COLOR_CLASSES = `
+    classDef purple fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    classDef green fill:#10b981,stroke:#059669,color:#fff
+    classDef blue fill:#3b82f6,stroke:#2563eb,color:#fff
+    classDef orange fill:#f97316,stroke:#ea580c,color:#fff
+    classDef pink fill:#ec4899,stroke:#db2777,color:#fff
+    classDef red fill:#ef4444,stroke:#dc2626,color:#fff
+    classDef yellow fill:#eab308,stroke:#ca8a04,color:#1e1e2e
+    classDef gray fill:#374151,stroke:#4b5563,color:#9ca3af
+    classDef cyan fill:#06b6d4,stroke:#0891b2,color:#fff`;
+
+// Inject dark theme into mermaid content if not already present
+function injectDarkTheme(content: string): string {
+  // Skip if diagram already has an init block
+  if (content.includes('%%{init:')) {
+    return content;
+  }
+
+  // Find the graph/flowchart declaration line
+  const lines = content.split('\n');
+  const graphLineIndex = lines.findIndex(line =>
+    /^\s*(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|gitGraph)\b/i.test(line)
+  );
+
+  if (graphLineIndex === -1) {
+    // No graph declaration found, prepend theme anyway
+    return `${DARK_THEME_INIT}\n${content}`;
+  }
+
+  // Insert theme before graph declaration, and color classes after
+  const beforeGraph = lines.slice(0, graphLineIndex);
+  const graphLine = lines[graphLineIndex];
+  const afterGraph = lines.slice(graphLineIndex + 1);
+
+  // Only add color classes for graph/flowchart types
+  const needsColorClasses = /^\s*(graph|flowchart)\b/i.test(graphLine);
+
+  if (needsColorClasses) {
+    return [
+      ...beforeGraph,
+      DARK_THEME_INIT,
+      graphLine,
+      COLOR_CLASSES,
+      ...afterGraph
+    ].join('\n');
+  }
+
+  return [
+    ...beforeGraph,
+    DARK_THEME_INIT,
+    graphLine,
+    ...afterGraph
+  ].join('\n');
+}
+
 // Check if a command exists
 async function commandExists(cmd: string): Promise<boolean> {
   try {
@@ -21,8 +80,11 @@ async function mermaidToPng(content: string, outputPath: string): Promise<boolea
     return false;
   }
 
+  // Inject dark theme if not already present
+  const themedContent = injectDarkTheme(content);
+
   const inputFile = join(tmpdir(), `arbora-mermaid-${Date.now()}.mmd`);
-  await Bun.write(inputFile, content);
+  await Bun.write(inputFile, themedContent);
 
   try {
     // Use --puppeteer-config to disable sandbox on Linux (required for Ubuntu 23.10+)
