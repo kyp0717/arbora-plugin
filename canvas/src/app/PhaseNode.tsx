@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { ScopeNode } from './ScopeNode.js';
+import { DiagramNode } from './DiagramNode.js';
 import type { Phase } from '../types/index.js';
 
 interface PhaseNodeProps {
@@ -10,6 +11,7 @@ interface PhaseNodeProps {
   isExpanded: boolean;
   isSelected: boolean;
   selectedScopeIdx?: number;
+  selectedDiagramIdx?: number;
 }
 
 // Get status icon
@@ -41,11 +43,17 @@ export function PhaseNode({
   isExpanded,
   isSelected,
   selectedScopeIdx,
+  selectedDiagramIdx,
 }: PhaseNodeProps) {
   const scopes = phase.scopes || [];
+  const diagrams = phase.diagrams || [];
+  const hasChildren = scopes.length > 0 || diagrams.length > 0;
   const icon = isExpanded ? '▼' : '▶';
   const statusIcon = getStatusIcon(phase.status || 'queued');
   const statusColor = getStatusColor(phase.status || 'queued');
+
+  // Show diagram count badge if phase has diagrams
+  const diagramBadge = diagrams.length > 0 ? ` 📊${diagrams.length}` : '';
 
   return (
     <Box flexDirection="column">
@@ -58,8 +66,25 @@ export function PhaseNode({
         <Text color={statusColor}>{statusIcon} </Text>
         <Text bold={isSelected}>{phase.name}</Text>
         <Text dimColor> ({phase.phase_type})</Text>
+        <Text color="magenta">{diagramBadge}</Text>
         <Text dimColor> {icon}</Text>
       </Box>
+
+      {/* Diagrams (if expanded, shown before scopes) */}
+      {isExpanded && diagrams.map((diagram, diagIdx) => {
+        const isLastItem = scopes.length === 0 && diagIdx === diagrams.length - 1;
+        const diagPrefix = childPrefix + (isLastItem ? '└─' : '├─');
+        const isDiagramSelected = selectedDiagramIdx === diagIdx;
+
+        return (
+          <DiagramNode
+            key={diagram.name}
+            diagram={diagram}
+            prefix={diagPrefix}
+            isSelected={isDiagramSelected}
+          />
+        );
+      })}
 
       {/* Scopes (if expanded) */}
       {isExpanded && scopes.map((scope, scopeIdx) => {
@@ -80,7 +105,7 @@ export function PhaseNode({
       })}
 
       {/* Spacing after phase */}
-      {isExpanded && scopes.length > 0 && (
+      {isExpanded && hasChildren && (
         <Text dimColor>{childPrefix.trimEnd()}</Text>
       )}
     </Box>
