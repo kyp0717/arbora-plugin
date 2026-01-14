@@ -5,11 +5,12 @@
   "author": {
     "name": "phage"
   },
-  "commands": "${CLAUDE_PLUGIN_ROOT}/commands",
-  "skills": "${CLAUDE_PLUGIN_ROOT}/skills",
-  "hooks": "${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json",
   "mcpServers": {
     "arbora": {
+      "type": "http",
+      "url": "http://localhost:9000/mcp"
+    },
+    "arbora-prod": {
       "type": "http",
       "url": "https://arbora.dev/mcp"
     }
