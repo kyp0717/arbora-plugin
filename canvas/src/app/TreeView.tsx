@@ -242,8 +242,6 @@ export function TreeView({ data }: TreeViewProps) {
   });
 
   const stats = calcStats(data);
-  const progress = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-  const progressBar = '█'.repeat(Math.floor(progress / 5)) + '░'.repeat(20 - Math.floor(progress / 5));
 
   return (
     <Box flexDirection="column">
@@ -304,15 +302,8 @@ export function TreeView({ data }: TreeViewProps) {
           <Text>📊 </Text>
           <Text>{data.stats?.phases || phases.length} phases, </Text>
           <Text>{data.stats?.scopes || 0} scopes, </Text>
-          <Text>{data.stats?.tasks || stats.total} tasks</Text>
+          <Text>{stats.completed}/{data.stats?.tasks || stats.total} tasks</Text>
           {stats.diagrams > 0 && <Text color="magenta">, {stats.diagrams} diagrams</Text>}
-        </Box>
-        <Box>
-          <Text>Progress: </Text>
-          <Text color={progress === 100 ? 'green' : progress > 50 ? 'yellow' : 'white'}>
-            {progressBar}
-          </Text>
-          <Text> {progress}%</Text>
         </Box>
       </Box>
 
@@ -322,6 +313,11 @@ export function TreeView({ data }: TreeViewProps) {
           <Text color="green">{message}</Text>
         </Box>
       )}
+
+      {/* Navigation instructions */}
+      <Box marginTop={1}>
+        <Text dimColor>↑↓ navigate  ←→ collapse/expand  Enter open diagram  a expand all  c collapse all</Text>
+      </Box>
     </Box>
   );
 }

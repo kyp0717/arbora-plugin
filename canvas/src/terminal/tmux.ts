@@ -76,7 +76,7 @@ export async function spawnPane(
   const splitDir = options.layout === 'split-right' ? '-h' : '-v';
 
   // Calculate size in columns (for -h) or lines (for -v)
-  const size = options.layout === 'split-right' ? 60 : 20;
+  const size = options.layout === 'split-right' ? 80 : 25;
 
   // Spawn pane with less for scrolling support
   // Use -d to NOT switch focus to the new pane (keep Claude session active)
@@ -140,7 +140,7 @@ export async function spawnServe(
 
   // Build tmux command based on layout
   const splitDir = options.layout === 'split-right' ? '-h' : '-v';
-  const size = options.layout === 'split-right' ? 60 : 20;
+  const size = options.layout === 'split-right' ? 80 : 25;
 
   // Spawn pane with the serve command
   // Use -d to NOT switch focus to the new pane
