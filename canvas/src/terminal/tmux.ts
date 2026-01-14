@@ -22,8 +22,18 @@ export async function hasTmux(): Promise<boolean> {
 }
 
 // Check if we're in a tmux session
+// Note: Don't rely on TMUX env var - Claude Code may not inherit it
 export async function inTmux(): Promise<boolean> {
-  return !!process.env.TMUX && (await hasTmux());
+  if (!(await hasTmux())) {
+    return false;
+  }
+  // Try to list panes - this works even without TMUX env var
+  try {
+    await $`tmux list-panes`.quiet();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Get stored pane ID if it exists and is valid
