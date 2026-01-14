@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import { TreeView } from './TreeView.js';
 import type { DraftTree } from '../types/index.js';
@@ -12,6 +12,7 @@ export function App({ initialData, watchFile }: AppProps) {
   const { exit } = useApp();
   const [data, setData] = useState<DraftTree | null>(initialData || null);
   const [error, setError] = useState<string | null>(null);
+  const lastMtimeRef = useRef<number>(0);
 
   // Watch file for updates
   useEffect(() => {
@@ -21,11 +22,17 @@ export function App({ initialData, watchFile }: AppProps) {
       try {
         const file = Bun.file(watchFile);
         if (await file.exists()) {
-          const content = await file.text();
-          if (content.trim()) {
-            const parsed = JSON.parse(content);
-            setData(parsed);
-            setError(null);
+          // Check modification time to detect changes
+          const mtime = file.lastModified;
+          if (mtime > lastMtimeRef.current) {
+            lastMtimeRef.current = mtime;
+            // Read file fresh
+            const content = await file.text();
+            if (content.trim()) {
+              const parsed = JSON.parse(content);
+              setData(parsed);
+              setError(null);
+            }
           }
         }
       } catch (e) {
@@ -36,7 +43,7 @@ export function App({ initialData, watchFile }: AppProps) {
     // Initial load
     checkFile();
 
-    // Poll for changes (Bun.watch would be better but this is simpler)
+    // Poll for changes
     const interval = setInterval(checkFile, 500);
 
     return () => clearInterval(interval);
@@ -71,11 +78,6 @@ export function App({ initialData, watchFile }: AppProps) {
   return (
     <Box flexDirection="column" padding={1}>
       <TreeView data={data} />
-      <Box marginTop={1}>
-        <Text dimColor>
-          [↑↓] Navigate  [Enter/→] Expand  [←] Collapse  [q] Quit
-        </Text>
-      </Box>
     </Box>
   );
 }

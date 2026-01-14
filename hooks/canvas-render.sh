@@ -56,7 +56,8 @@ if [[ "$TOOL_NAME" == "draft_get" ]]; then
 
         # Start TUI pane if not already running
         if ! pane_exists; then
-          bun run "$CANVAS_CLI" start &>/dev/null &
+          CANVAS_DIR="$PLUGIN_ROOT/canvas"
+          (cd "$CANVAS_DIR" && bun run src/cli.ts start >> "$DEBUG_LOG" 2>&1) &
         fi
       fi
     fi

@@ -316,7 +316,7 @@ export function TreeView({ data }: TreeViewProps) {
 
       {/* Navigation instructions */}
       <Box marginTop={1}>
-        <Text dimColor>↑↓ navigate  ←→ collapse/expand  Enter open diagram  a expand all  c collapse all</Text>
+        <Text dimColor>↑↓ navigate  ←→ collapse/expand  Enter open diagram  a/c expand/collapse all  q quit</Text>
       </Box>
     </Box>
   );

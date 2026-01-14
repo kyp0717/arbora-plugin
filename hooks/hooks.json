@@ -2,7 +2,7 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "mcp__arbora__call_tool",
+        "matcher": "mcp__.*arbora.*__call_tool",
         "hooks": [
           {
             "type": "command",
