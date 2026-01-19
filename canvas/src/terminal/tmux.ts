@@ -90,8 +90,9 @@ export async function spawnPane(
 
   // Spawn pane with less for scrolling support
   // Use -d to NOT switch focus to the new pane (keep Claude session active)
+  // Use -b to split before (left side instead of right)
   // less flags: -R (ANSI colors), -S (no wrap), +G (start at end), -X (no clear on exit)
-  const cmd = `tmux split-window -d ${splitDir} -l ${size} -P -F "#{pane_id}" "less -R -S -X '${CONTENT_FILE}'"`;
+  const cmd = `tmux split-window -d -b ${splitDir} -l ${size} -P -F "#{pane_id}" "less -R -S -X '${CONTENT_FILE}'"`;
 
   const proc = Bun.spawn(['bash', '-c', cmd], {
     stdout: 'pipe',
@@ -154,7 +155,8 @@ export async function spawnServe(
 
   // Spawn pane with the serve command
   // Use -d to NOT switch focus to the new pane
-  const cmd = `tmux split-window -d ${splitDir} -l ${size} -P -F "#{pane_id}" "bun run '${cliPath}' serve"`;
+  // Use -b to split before (left side instead of right)
+  const cmd = `tmux split-window -d -b ${splitDir} -l ${size} -P -F "#{pane_id}" "bun run '${cliPath}' serve"`;
 
   const proc = Bun.spawn(['bash', '-c', cmd], {
     stdout: 'pipe',

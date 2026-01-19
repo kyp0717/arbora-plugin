@@ -246,13 +246,16 @@ export function TreeView({ data }: TreeViewProps) {
   return (
     <Box flexDirection="column">
       {/* Header */}
-      <Box>
-        <Text color="cyan">📋 </Text>
-        <Text bold>{data.draft?.name || 'Draft'}</Text>
-        <Text dimColor> [{data.draft?.draft_type}] </Text>
-        <Text color={getStatusColor(data.draft?.status || 'queued')}>
-          {data.draft?.status}
-        </Text>
+      <Box flexDirection="column">
+        <Box>
+          <Text color="cyan">📋 </Text>
+          <Text bold>{data.draft?.name || 'Draft'}</Text>
+          <Text dimColor> [{data.draft?.draft_type}] </Text>
+          <Text color={getStatusColor(data.draft?.status || 'queued')}>
+            {data.draft?.status}
+          </Text>
+        </Box>
+        <Text dimColor>   {data.draft?.id}</Text>
       </Box>
 
       <Text dimColor>│</Text>
@@ -315,8 +318,12 @@ export function TreeView({ data }: TreeViewProps) {
       )}
 
       {/* Navigation instructions */}
-      <Box marginTop={1}>
-        <Text dimColor>↑↓ navigate  ←→ collapse/expand  Enter open diagram  a/c expand/collapse all  q quit</Text>
+      <Box marginTop={1} flexDirection="column">
+        <Text dimColor>↑↓  navigate</Text>
+        <Text dimColor>←→  collapse/expand</Text>
+        <Text dimColor>⏎   open diagram</Text>
+        <Text dimColor>a/c expand/collapse all</Text>
+        <Text dimColor>q   quit</Text>
       </Box>
     </Box>
   );
