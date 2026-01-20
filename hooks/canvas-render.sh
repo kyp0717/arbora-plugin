@@ -92,9 +92,9 @@ extract_delta() {
       fi
       ;;
 
-    task_create)
+    task_create|task_add)
       # Extract created task from response
-      local task=$(echo "$response" | jq -c '.task // empty' 2>/dev/null)
+      local task=$(echo "$response" | jq -c '. | if .task then .task else {id: .id, parent_id: .parent_id, parent_type: .parent_type, title: .title, description: .description, completed: (.completed // false), step: .step} end' 2>/dev/null)
       if [[ -n "$task" ]] && [[ "$task" != "null" ]] && [[ "$task" != "" ]]; then
         echo "{\"id\":\"$delta_id\",\"timestamp\":$timestamp,\"action\":\"task_create\",\"task\":$task}"
       fi
@@ -213,7 +213,7 @@ if [[ "$TOOL_NAME" == "draft_get" ]]; then
 fi
 
 # Handle modification tools - write delta for instant UI update, then background sync
-MODIFY_TOOLS="task_update task_create task_delete scope_update scope_create scope_delete phase_update phase_create phase_delete draft_update diagram_add diagram_update diagram_delete"
+MODIFY_TOOLS="task_update task_create task_add task_delete scope_update scope_create scope_add scope_delete phase_update phase_create phase_add phase_delete draft_update diagram_add diagram_update diagram_delete"
 
 if echo "$MODIFY_TOOLS" | grep -qw "$TOOL_NAME"; then
   # Only process if canvas pane exists and we have a draft_id

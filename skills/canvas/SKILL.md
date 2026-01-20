@@ -41,3 +41,14 @@ If arguments specify a draft name or ID, fetch that specific draft with `tree: t
 - The canvas pane appears on the right side (40% width)
 - It auto-updates when tasks are completed or drafts are modified
 - Use `/arbora:canvas close` to close the pane
+
+## IMPORTANT: Do NOT call draft_get after modifications
+
+When the canvas is open, **never** call `draft_get` after modification tools like:
+- `task_add`, `task_update`, `task_delete`
+- `scope_add`, `scope_update`, `scope_delete`
+- `phase_add`, `phase_update`, `phase_delete`
+- `draft_update`
+- `diagram_add`, `diagram_update`, `diagram_delete`
+
+The canvas **automatically updates** via optimistic updates. Calling `draft_get` is redundant and wastes API calls. Just confirm the action succeeded based on the tool response.

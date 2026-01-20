@@ -1,10 +1,25 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { PhaseNode } from './PhaseNode.js';
-import type { DraftTree, Phase, Diagram } from '../types/index.js';
+import { ScopeNode } from './ScopeNode.js';
+import type { DraftTree, Phase, Diagram, Task } from '../types/index.js';
 import { spawn } from 'bun';
 import { tmpdir } from 'os';
 import { join } from 'path';
+
+// Task checkbox component for flat template
+function TaskItem({ task, isLast }: { task: Task; isLast: boolean }) {
+  const prefix = isLast ? '└─' : '├─';
+  const checkbox = task.completed ? '[✓]' : '[ ]';
+  const textColor = task.completed ? 'green' : 'white';
+
+  return (
+    <Box>
+      <Text dimColor>{prefix} </Text>
+      <Text color={textColor}>{checkbox} {task.title}</Text>
+    </Box>
+  );
+}
 
 interface TreeViewProps {
   data: DraftTree;
@@ -20,12 +35,27 @@ interface NavItem {
   diagram?: Diagram;
 }
 
-// Calculate stats
+// Calculate stats for all template types
 function calcStats(data: DraftTree): { completed: number; total: number; diagrams: number } {
   let completed = 0;
   let total = 0;
   let diagrams = 0;
 
+  // Flat template: tasks directly on draft
+  for (const task of data.tasks || []) {
+    total++;
+    if (task.completed) completed++;
+  }
+
+  // Spatial template: scopes directly on draft
+  for (const scope of data.scopes || []) {
+    for (const task of scope.tasks || []) {
+      total++;
+      if (task.completed) completed++;
+    }
+  }
+
+  // Matrix/temporal template: phases -> scopes -> tasks
   for (const phase of data.phases || []) {
     diagrams += (phase.diagrams || []).length;
     for (const scope of phase.scopes || []) {
@@ -260,7 +290,35 @@ export function TreeView({ data }: TreeViewProps) {
 
       <Text dimColor>│</Text>
 
-      {/* Phases */}
+      {/* Flat template: tasks directly under draft */}
+      {data.template === 'flat' && data.tasks && data.tasks.length > 0 && (
+        <Box flexDirection="column">
+          {data.tasks.map((task, idx) => (
+            <TaskItem
+              key={task.id || idx}
+              task={task}
+              isLast={idx === data.tasks!.length - 1}
+            />
+          ))}
+        </Box>
+      )}
+
+      {/* Spatial template: scopes directly under draft */}
+      {data.template === 'spatial' && data.scopes && data.scopes.length > 0 && (
+        <Box flexDirection="column">
+          {data.scopes.map((scope, idx) => (
+            <ScopeNode
+              key={scope.id || idx}
+              scope={scope}
+              prefix={idx === data.scopes!.length - 1 ? '└─' : '├─'}
+              childPrefix={idx === data.scopes!.length - 1 ? '   ' : '│  '}
+              isSelected={false}
+            />
+          ))}
+        </Box>
+      )}
+
+      {/* Matrix/temporal template: phases */}
       {phases.map((phase, phaseIdx) => {
         const isExpanded = expandedPhases.has(phaseIdx);
         const isLast = phaseIdx === phases.length - 1;
