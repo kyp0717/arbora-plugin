@@ -20,136 +20,83 @@ Run these checks in order and report results:
 ```bash
 command -v bun && bun --version
 ```
-- ✓ Pass: bun found with version
-- ✗ Fail: "bun not found. Install: curl -fsSL https://bun.sh/install | bash"
+- Pass: bun found with version
+- Fail: "bun not found. Install: curl -fsSL https://bun.sh/install | bash"
 
-### 2. Check Tmux Installation
+### 2. Check Canvas Binary
 ```bash
-command -v tmux && tmux -V
+command -v arbora-canvas || ls ~/.local/bin/arbora-canvas 2>/dev/null || ls /usr/local/bin/arbora-canvas 2>/dev/null
 ```
-- ✓ Pass: tmux found with version
-- ✗ Fail: "tmux not found. Install: apt install tmux (or brew install tmux)"
+- Pass: arbora-canvas binary found
+- Fail: "Canvas binary not found. Install: curl -fsSL https://raw.githubusercontent.com/your-org/arbora-plugin/main/scripts/install-canvas.sh | bash"
 
-### 3. Check Tmux Session
-```bash
-tmux list-panes 2>/dev/null
-```
-- ✓ Pass: Running inside tmux
-- ⚠ Warn: "Not in tmux session. Canvas pane requires tmux. Run: tmux"
-
-### 4. Check Tmux Configuration
-```bash
-tmux show-options -g mouse 2>/dev/null
-tmux show-options -g history-limit 2>/dev/null
-tmux show-options -g mode-keys 2>/dev/null
-```
-
-Required settings for best experience:
-| Setting | Recommended | Purpose |
-|---------|-------------|---------|
-| `mouse` | `on` | Mouse support for scrolling/clicking |
-| `history-limit` | `10000+` | Scroll buffer size |
-| `mode-keys` | `vi` or `emacs` | Keyboard navigation in copy mode |
-
-- ✓ Pass: All recommended settings configured
-- ⚠ Warn: Show missing settings and how to fix
-
-**If tmux config is missing or incomplete, suggest adding to `~/.tmux.conf`:**
-```bash
-# Mouse support
-set -g mouse on
-
-# Increase scroll buffer
-set -g history-limit 50000
-
-# Vi mode for copy/navigation
-setw -g mode-keys vi
-
-# Better colors
-set -g default-terminal "screen-256color"
-set -ag terminal-overrides ",xterm-256color:RGB"
-
-# Don't rename windows automatically
-set -g allow-rename off
-
-# Start windows/panes at 1 instead of 0
-set -g base-index 1
-setw -g pane-base-index 1
-
-# Faster escape time (better for vim)
-set -sg escape-time 10
-
-# Enable focus events (for vim autoread)
-set -g focus-events on
-```
-
-### 5. Check MCP Server Connection
+### 3. Check MCP Server Connection
 ```
 tool_name: "project_list"
 params: {}
 ```
-- ✓ Pass: Server responds with project list
-- ✗ Fail: "Cannot connect to arbora server. Check if server is running."
+- Pass: Server responds with project list
+- Fail: "Cannot connect to arbora server. Check if server is running."
 
-### 6. Check Canvas Dependencies
+### 4. Check Netcat (for socket IPC)
 ```bash
-ls ${CLAUDE_PLUGIN_ROOT}/canvas/node_modules/ink 2>/dev/null
+command -v nc && nc -h 2>&1 | head -1
 ```
-- ✓ Pass: Dependencies installed
-- ✗ Fail: "Canvas dependencies missing. Run: cd <plugin>/canvas && bun install"
+- Pass: netcat available
+- Warn: "netcat (nc) not found. Canvas updates may not work. Install: apt install netcat (or brew install netcat)"
 
-### 7. Check Hook Configuration
+### 5. Check Hook Configuration
 ```bash
 cat ${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json
 ```
-- ✓ Pass: hooks.json exists and contains PostToolUse
-- ✗ Fail: "Hook configuration missing or invalid"
+- Pass: hooks.json exists and contains PostToolUse
+- Fail: "Hook configuration missing or invalid"
+
+### 6. Check jq Installation (for hooks)
+```bash
+command -v jq && jq --version
+```
+- Pass: jq found
+- Fail: "jq not found. Install: apt install jq (or brew install jq)"
 
 ## Output Format
 
 ```
-🔍 Arbora Plugin Diagnostics
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Arbora Plugin Diagnostics
 
-✓ Bun             v1.1.38
-✓ Tmux            v3.4
-✓ Tmux Session    active
-✓ Tmux Config     mouse=on, history=50000, mode-keys=vi
-✓ MCP Server      connected (arbora.dev)
-✓ Canvas Deps     installed
-✓ Hooks           configured
+* Bun             v1.1.38
+* Canvas Binary   ~/.local/bin/arbora-canvas
+* MCP Server      connected (arbora.dev)
+* Netcat          available
+* Hooks           configured
+* jq              v1.7
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Status: All checks passed ✓
+Status: All checks passed
 ```
 
 Or with issues:
 
 ```
-🔍 Arbora Plugin Diagnostics
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Arbora Plugin Diagnostics
 
-✓ Bun             v1.1.38
-✓ Tmux            v3.4
-✗ Tmux Session    not active
-⚠ Tmux Config     mouse=off (should be on)
-✓ MCP Server      connected
-✗ Canvas Deps     missing
-✓ Hooks           configured
+* Bun             v1.1.38
+x Canvas Binary   not found
+* MCP Server      connected
+! Netcat          not found
+* Hooks           configured
+* jq              v1.7
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Status: 2 errors, 1 warning
+Status: 1 error, 1 warning
 
 Fixes needed:
-1. Start tmux: tmux
-2. Install deps: cd /path/to/plugin/canvas && bun install
-3. Add to ~/.tmux.conf: set -g mouse on
+1. Install canvas: curl -fsSL .../scripts/install-canvas.sh | bash
+2. Install netcat: apt install netcat
 ```
 
 ## Arguments
 $ARGUMENTS
 
-- `--fix`: Attempt to auto-fix issues (install deps, configure tmux, etc.)
+- `--fix`: Attempt to auto-fix issues (install deps, etc.)
 - `--quiet`: Only show failures
 
 ## Auto-Fix Behavior (--fix)
@@ -158,14 +105,13 @@ When `--fix` is specified:
 
 1. **Missing bun**: Offer to run `curl -fsSL https://bun.sh/install | bash`
 
-2. **Missing canvas deps**: Run `cd <plugin>/canvas && bun install`
-
-3. **Tmux config issues**: Append missing settings to `~/.tmux.conf`:
+2. **Missing canvas binary**: Run the install script:
    ```bash
-   echo 'set -g mouse on' >> ~/.tmux.conf
-   tmux source-file ~/.tmux.conf  # Reload without restart
+   curl -fsSL https://raw.githubusercontent.com/your-org/arbora-plugin/main/scripts/install-canvas.sh | bash
    ```
 
-4. **Not in tmux**: Cannot auto-fix, user must start tmux manually
+3. **Missing jq**: Offer to install via package manager
+
+4. **Missing netcat**: Offer to install via package manager
 
 Always ask for confirmation before making changes.

@@ -1,0 +1,111 @@
+name: Release Canvas
+
+on:
+  push:
+    tags:
+      - 'canvas-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            asset_name: arbora-canvas-linux-x64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            asset_name: arbora-canvas-linux-arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            asset_name: arbora-canvas-macos-x64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            asset_name: arbora-canvas-macos-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache-dependency-path: canvas-go/go.sum
+
+      - name: Install Linux dependencies
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev \
+            xorg-dev \
+            libxkbcommon-dev \
+            libxxf86vm-dev
+
+      - name: Build binary
+        working-directory: canvas-go
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: |
+          go build -ldflags="-s -w" -o arbora-canvas .
+          tar -czvf ${{ matrix.asset_name }}.tar.gz arbora-canvas
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: canvas-go/${{ matrix.asset_name }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name || format('canvas-v{0}', github.event.inputs.version) }}
+          name: Canvas ${{ github.ref_name || github.event.inputs.version }}
+          draft: false
+          prerelease: false
+          files: artifacts/**/*.tar.gz
+          body: |
+            ## Arbora Canvas Release
+
+            Native desktop canvas for visualizing Arbora drafts.
+
+            ### Installation
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/your-org/arbora-plugin/main/scripts/install-canvas.sh | bash
+            ```
+
+            Or download the binary for your platform below and place it in `~/.local/bin/` or `/usr/local/bin/`.
+
+            ### Platforms
+            - **Linux x64**: `arbora-canvas-linux-x64.tar.gz`
+            - **Linux ARM64**: `arbora-canvas-linux-arm64.tar.gz`
+            - **macOS x64**: `arbora-canvas-macos-x64.tar.gz`
+            - **macOS ARM64**: `arbora-canvas-macos-arm64.tar.gz`

@@ -1,18 +1,13 @@
 #!/usr/bin/env bash
 # PostToolUse hook for mcp__arbora__call_tool
-# Starts TUI canvas and handles live updates with optimistic deltas
+# Starts Tauri canvas app and handles live updates with optimistic deltas via Unix socket
 
 set -euo pipefail
 
-# Add bun to PATH (installed via bun.sh)
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
-DATA_FILE="/tmp/arbora-canvas-data.json"
-DELTA_FILE="/tmp/arbora-canvas-deltas.jsonl"
-PANE_ID_FILE="/tmp/arbora-canvas-pane-id"
+SOCKET_PATH="/tmp/arbora-canvas.sock"
 DRAFT_ID_FILE="/tmp/arbora-canvas-draft-id"
 DEBUG_LOG="/tmp/arbora-hook-debug.log"
+CANVAS_BINARY="${ARBORA_CANVAS_BIN:-arbora-canvas}"
 
 # Debug: log that hook was called
 echo "$(date): Hook called" >> "$DEBUG_LOG"
@@ -26,53 +21,79 @@ TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_input.tool_name // empty')
 PARAMS=$(echo "$INPUT" | jq -r '.tool_input.params // empty')
 TOOL_RESPONSE=$(echo "$INPUT" | jq -r '.tool_response[0].text // empty')
 
-# Check if tmux is available (don't rely on $TMUX env var - Claude Code may not inherit it)
-if ! command -v tmux &>/dev/null || ! tmux list-panes &>/dev/null; then
-  echo '{"continue": true}'
-  exit 0
-fi
-
 # Get the plugin root directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Check if canvas pane exists and is running
-pane_exists() {
-  if [[ -f "$PANE_ID_FILE" ]]; then
-    local pane_id=$(cat "$PANE_ID_FILE" 2>/dev/null)
-    if [[ -n "$pane_id" ]]; then
-      tmux list-panes -F "#{pane_id}" 2>/dev/null | grep -q "^${pane_id}$" && return 0
-    fi
+# Check if canvas socket exists (app is running)
+canvas_running() {
+  [[ -S "$SOCKET_PATH" ]]
+}
+
+# Send message to canvas via Unix socket
+send_to_socket() {
+  local message="$1"
+  if canvas_running; then
+    # Use nc (netcat) to send message to Unix socket
+    # -U for Unix socket, -w 1 for 1 second timeout
+    echo "$message" | nc -U -w 1 "$SOCKET_PATH" 2>/dev/null || true
+    echo "$(date): Sent to socket: ${message:0:100}..." >> "$DEBUG_LOG"
+    return 0
   fi
   return 1
+}
+
+# Launch canvas app if not running
+launch_canvas() {
+  if canvas_running; then
+    return 0
+  fi
+
+  echo "$(date): Launching canvas app..." >> "$DEBUG_LOG"
+
+  # Try to find the canvas binary
+  local binary=""
+
+  # Check if ARBORA_CANVAS_BIN is set and exists
+  if [[ -n "$CANVAS_BINARY" ]] && command -v "$CANVAS_BINARY" &>/dev/null; then
+    binary="$CANVAS_BINARY"
+  # Check common install locations
+  elif [[ -x "$HOME/.local/bin/arbora-canvas" ]]; then
+    binary="$HOME/.local/bin/arbora-canvas"
+  elif [[ -x "/usr/local/bin/arbora-canvas" ]]; then
+    binary="/usr/local/bin/arbora-canvas"
+  # Check if we can run from the Go build
+  elif [[ -x "$PLUGIN_ROOT/canvas-go/arbora-canvas" ]]; then
+    binary="$PLUGIN_ROOT/canvas-go/arbora-canvas"
+  fi
+
+  if [[ -z "$binary" ]]; then
+    echo "$(date): Canvas binary not found" >> "$DEBUG_LOG"
+    return 1
+  fi
+
+  # Launch in background
+  "$binary" &
+
+  # Wait for socket to become available (max 3 seconds)
+  local waited=0
+  while [[ ! -S "$SOCKET_PATH" ]] && [[ $waited -lt 30 ]]; do
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+
+  if canvas_running; then
+    echo "$(date): Canvas app launched successfully" >> "$DEBUG_LOG"
+    return 0
+  else
+    echo "$(date): Canvas app failed to start" >> "$DEBUG_LOG"
+    return 1
+  fi
 }
 
 # Generate a unique delta ID
 generate_delta_id() {
   echo "delta_$(date +%s%N | cut -c1-16)_$$"
-}
-
-# Write a delta to the delta file (instant local update)
-write_delta() {
-  local delta_json="$1"
-  echo "$delta_json" >> "$DELTA_FILE"
-  echo "$(date): Wrote delta: $delta_json" >> "$DEBUG_LOG"
-}
-
-# Background sync: refresh full draft from server (runs after delta is written)
-background_sync() {
-  local draft_id="$1"
-  if [[ -z "$draft_id" ]]; then
-    return 1
-  fi
-
-  # Small delay to let server process the update
-  sleep 0.5
-
-  REFRESH_SCRIPT="$PLUGIN_ROOT/canvas/src/refresh.ts"
-  if [[ -f "$REFRESH_SCRIPT" ]]; then
-    (cd "$PLUGIN_ROOT/canvas" && bun run src/refresh.ts "$draft_id" >> "$DEBUG_LOG" 2>&1)
-  fi
 }
 
 # Extract delta from tool call and response
@@ -183,18 +204,12 @@ extract_delta() {
   esac
 }
 
-# Handle draft_get with tree=true - write data, save draft_id, start TUI
+# Handle draft_get with tree=true - send full state to canvas
 if [[ "$TOOL_NAME" == "draft_get" ]]; then
   if [[ -n "$PARAMS" ]]; then
     TREE_FLAG=$(echo "$PARAMS" | jq -r '.tree // false')
     if [[ "$TREE_FLAG" == "true" ]]; then
       if [[ -n "$TOOL_RESPONSE" ]] && [[ "$TOOL_RESPONSE" != "null" ]]; then
-        # Write draft data to file (TUI will pick it up)
-        echo "$TOOL_RESPONSE" > "$DATA_FILE"
-
-        # Clear any pending deltas since we have fresh data
-        > "$DELTA_FILE"
-
         # Save the draft_id for future refreshes
         DRAFT_ID=$(echo "$TOOL_RESPONSE" | jq -r '.draft.id // empty')
         if [[ -n "$DRAFT_ID" ]]; then
@@ -202,32 +217,36 @@ if [[ "$TOOL_NAME" == "draft_get" ]]; then
           echo "$(date): Saved draft_id: $DRAFT_ID" >> "$DEBUG_LOG"
         fi
 
-        # Start TUI pane if not already running
-        if ! pane_exists; then
-          CANVAS_DIR="$PLUGIN_ROOT/canvas"
-          (cd "$CANVAS_DIR" && bun run src/cli.ts start >> "$DEBUG_LOG" 2>&1) &
+        # Launch canvas if not running
+        launch_canvas
+
+        # Send full state to canvas via socket
+        if canvas_running; then
+          MESSAGE=$(jq -c -n --argjson payload "$TOOL_RESPONSE" '{"type": "full_state", "payload": $payload}')
+          send_to_socket "$MESSAGE"
+
+          # Also show the window
+          send_to_socket '{"type": "command", "payload": {"action": "show"}}'
         fi
       fi
     fi
   fi
 fi
 
-# Handle modification tools - write delta for instant UI update, then background sync
+# Handle modification tools - send delta for instant UI update
 MODIFY_TOOLS="task_update task_create task_add task_delete scope_update scope_create scope_add scope_delete phase_update phase_create phase_add phase_delete draft_update diagram_add diagram_update diagram_delete"
 
 if echo "$MODIFY_TOOLS" | grep -qw "$TOOL_NAME"; then
-  # Only process if canvas pane exists and we have a draft_id
-  if pane_exists && [[ -f "$DRAFT_ID_FILE" ]]; then
+  # Only process if canvas is running and we have a draft_id
+  if canvas_running && [[ -f "$DRAFT_ID_FILE" ]]; then
     DRAFT_ID=$(cat "$DRAFT_ID_FILE" 2>/dev/null)
     if [[ -n "$DRAFT_ID" ]]; then
-      # Extract and write delta for instant local update
+      # Extract and send delta for instant local update
       DELTA=$(extract_delta "$TOOL_NAME" "$PARAMS" "$TOOL_RESPONSE")
       if [[ -n "$DELTA" ]]; then
-        write_delta "$DELTA"
+        MESSAGE=$(jq -c -n --argjson payload "$DELTA" '{"type": "delta", "payload": $payload}')
+        send_to_socket "$MESSAGE"
       fi
-
-      # Background sync to verify with server (non-blocking)
-      (background_sync "$DRAFT_ID") &
     fi
   fi
 fi
